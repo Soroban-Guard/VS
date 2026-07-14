@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SorobanGuardDiagnostics } from './diagnostics';
 import { SorobanGuardStatusBar } from './statusBar';
+import { SorobanGuardCodeActionProvider } from './codeActions';
 import { showReportPanel } from './reportPanel';
 
 let diagnosticsProvider: SorobanGuardDiagnostics;
@@ -49,6 +50,14 @@ export function activate(context: vscode.ExtensionContext) {
                 diagnosticsProvider.updateConfig();
             }
         })
+    );
+
+    context.subscriptions.push(
+        vscode.languages.registerCodeActionsProvider(
+            { language: 'rust' },
+            new SorobanGuardCodeActionProvider(),
+            { providedCodeActionKinds: SorobanGuardCodeActionProvider.providedCodeActionKinds }
+        )
     );
 
     statusBar.update('idle');

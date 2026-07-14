@@ -4,70 +4,84 @@ export class SorobanGuardCodeActionProvider implements vscode.CodeActionProvider
     public static readonly providedCodeActionKinds = [
         vscode.CodeActionKind.QuickFix,
     ];
-
+    
     provideCodeActions(
         document: vscode.TextDocument,
-        _range: vscode.Range | vscode.Selection,
+        range: vscode.Range,
         context: vscode.CodeActionContext,
-        _token: vscode.CancellationToken
-    ): vscode.ProviderResult<(vscode.CodeAction | vscode.Command)[]> {
+        token: vscode.CancellationToken
+    ): vscode.ProviderResult<vscode.CodeAction[]> {
         const actions: vscode.CodeAction[] = [];
-
+        
         for (const diagnostic of context.diagnostics) {
-            if (diagnostic.source !== 'soroban-guard') {
-                continue;
-            }
-
-            const ruleCode = diagnostic.code as string;
-            const suggestion = diagnostic.relatedInformation?.[0]?.message;
-
-            if (suggestion) {
-                const applyFix = new vscode.CodeAction(
-                    `Apply suggestion: ${suggestion.substring(0, 60)}${suggestion.length > 60 ? '...' : ''}`,
+            if (diagnostic.source !== 'soroban-guard') continue;
+            
+            const ruleId = diagnostic.code as string;
+            
+            // Suggest adding require_auth
+            if (ruleId?.startsWith('A-01') || ruleId?.startsWith('A-04')) {
+                const action = new vscode.CodeAction(
+                    'Add require_auth() check',
                     vscode.CodeActionKind.QuickFix
                 );
-                applyFix.edit = new vscode.WorkspaceEdit();
-                applyFix.edit.replace(
+                action.edit = new vscode.WorkspaceEdit();
+                action.edit.insert(
                     document.uri,
-                    diagnostic.range,
-                    suggestion
+                    new vscode.Position(range.start.line, 0),
+                    '    require_auth(&admin);\n'
                 );
-                applyFix.diagnostics = [diagnostic];
-                applyFix.isPreferred = true;
-                actions.push(applyFix);
+                action.diagnostics = [diagnostic];
+                actions.push(action);
             }
-
-            const suppressRule = new vscode.CodeAction(
-                `Suppress ${ruleCode} for this line`,
-                vscode.CodeActionKind.QuickFix
-            );
-            suppressRule.edit = new vscode.WorkspaceEdit();
-            const line = document.lineAt(diagnostic.range.start.line);
-            suppressRule.edit.insert(
-                document.uri,
-                line.range.end,
-                ` // @soroban-guard-ignore ${ruleCode}`
-            );
-            suppressRule.diagnostics = [diagnostic];
-            actions.push(suppressRule);
-
-            const showDocs = new vscode.CodeAction(
-                `View documentation for ${ruleCode}`,
-                vscode.CodeActionKind.QuickFix
-            );
-            showDocs.command = {
-                command: 'vscode.open',
-                title: 'Open Documentation',
-                arguments: [
-                    vscode.Uri.parse(
-                        `https://soroban-guard.dev/rules/${ruleCode}`
-                    ),
-                ],
-            };
-            showDocs.diagnostics = [diagnostic];
-            actions.push(showDocs);
+            
+            // Suggest using checked arithmetic
+            if (ruleId?.startsWith('O-01')) {
+                const action = new vscode.CodeAction(
+                    'Use checked arithmetic',
+                    vscode.CodeActionKind.QuickFix
+                );
+                action.edit = new vscode.WorkspaceEdit();
+                
+                // Get the line text and suggest replacement
+                const line = document.lineAt(range.start.line).text;
+                const checkedMatch = line.match(/(\w+)\s*([+\-*\/])\s*(\w+)/);
+                if (checkedMatch) {
+                    const [_, left, op, right] = checkedMatch;
+                    const checkedMethod = op === '+' ? 'checked_add' 
+                        : op === '-' ? 'checked_sub' 
+                        : op === '*' ? 'checked_mul' 
+                        : op === '/' ? 'checked_div' : null;
+                    
+                    if (checkedMethod) {
+                        action.edit.replace(
+                            document.uri,
+                            new vscode.Range(range.start.line, 0, range.start.line, line.length),
+                            line.replace(
+                                `${left} ${op} ${right}`,
+                                `${left}.${checkedMethod}(${right}).unwrap_or(0)`
+                            )
+                        );
+                    }
+                }
+                action.diagnostics = [diagnostic];
+                actions.push(action);
+            }
+            
+            // Suggest moving state before external call
+            if (ruleId === 'R-01') {
+                const action = new vscode.CodeAction(
+                    'View reentrancy fix suggestion',
+                    vscode.CodeActionKind.QuickFix
+                );
+                action.diagnostics = [diagnostic];
+                action.command = {
+                    command: 'soroban-guard.showReport',
+                    title: 'Show reentrancy details',
+                };
+                actions.push(action);
+            }
         }
-
+        
         return actions;
     }
 }
