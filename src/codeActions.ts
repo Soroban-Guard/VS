@@ -9,7 +9,7 @@ export class SorobanGuardCodeActionProvider implements vscode.CodeActionProvider
         document: vscode.TextDocument,
         range: vscode.Range,
         context: vscode.CodeActionContext,
-        token: vscode.CancellationToken
+        _token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.CodeAction[]> {
         const actions: vscode.CodeAction[] = [];
         
@@ -44,9 +44,9 @@ export class SorobanGuardCodeActionProvider implements vscode.CodeActionProvider
                 
                 // Get the line text and suggest replacement
                 const line = document.lineAt(range.start.line).text;
-                const checkedMatch = line.match(/(\w+)\s*([+\-*\/])\s*(\w+)/);
+                const checkedMatch = line.match(/(\w+)\s*([+\-*/])\s*(\w+)/);
                 if (checkedMatch) {
-                    const [_, left, op, right] = checkedMatch;
+                    const [, left, op, right] = checkedMatch;
                     const checkedMethod = op === '+' ? 'checked_add' 
                         : op === '-' ? 'checked_sub' 
                         : op === '*' ? 'checked_mul' 

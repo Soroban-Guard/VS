@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
+import { spawn, ChildProcess } from 'child_process';
 
 export class SorobanGuardServer {
-    private process: any = null;
+    private process: ChildProcess | null = null;
 
     async start(): Promise<void> {
         const config = vscode.workspace.getConfiguration('sorobanGuard');
@@ -13,20 +14,20 @@ export class SorobanGuardServer {
         }
 
         try {
-            const { spawn } = require('child_process');
-            this.process = spawn(binaryPath, ['server', '--stdio'], {
+            const proc = spawn(binaryPath, ['server', '--stdio'], {
                 stdio: ['pipe', 'pipe', 'pipe'],
             });
+            this.process = proc;
 
-            this.process.stdout.on('data', (data: Buffer) => {
+            proc.stdout?.on('data', (data: Buffer) => {
                 this.handleServerMessage(data.toString());
             });
 
-            this.process.stderr.on('data', (data: Buffer) => {
+            proc.stderr?.on('data', (data: Buffer) => {
                 console.error('Soroban Guard server error:', data.toString());
             });
 
-            this.process.on('close', (code: number) => {
+            proc.on('close', (code: number | null) => {
                 console.log(`Soroban Guard server exited with code ${code}`);
                 this.process = null;
             });

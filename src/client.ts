@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { execSync } from 'child_process';
 import { getConfig } from './config';
 
 export class SorobanGuardClient {
@@ -23,7 +24,6 @@ export class SorobanGuardClient {
     async checkBinary(): Promise<boolean> {
         const config = getConfig();
         try {
-            const { execSync } = require('child_process');
             execSync(`"${config.path}" --version`, { encoding: 'utf-8', timeout: 5000 });
             this.log(`Found soroban-guard at: ${config.path}`);
             return true;

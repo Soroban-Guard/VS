@@ -1,6 +1,27 @@
 import * as vscode from 'vscode';
 
-export function showReportPanel(results: any): void {
+interface Finding {
+    severity: string;
+    rule_id: string;
+    message: string;
+    location: {
+        file: string;
+        line: number;
+    };
+    suggestion: string;
+}
+
+interface Report {
+    score: number;
+    grade: string;
+    findings: Finding[];
+}
+
+interface Results {
+    reports: Report[];
+}
+
+export function showReportPanel(results: Results | null): void {
     const panel = vscode.window.createWebviewPanel(
         'sorobanGuardReport',
         'Soroban Guard Report',
@@ -11,7 +32,7 @@ export function showReportPanel(results: any): void {
     panel.webview.html = generateHtml(results);
 }
 
-function generateHtml(results: any): string {
+function generateHtml(results: Results | null): string {
     if (!results) {
         return `<!DOCTYPE html>
         <html>
@@ -36,7 +57,7 @@ function generateHtml(results: any): string {
         info: '#6c757d',
     };
     
-    const findingRows = findings.map((f: any) => `
+    const findingRows = findings.map((f: Finding) => `
         <tr>
             <td><span class="badge" style="background: ${severityColors[f.severity] || '#6c757d'}">${f.severity}</span></td>
             <td><code>${f.rule_id}</code></td>
