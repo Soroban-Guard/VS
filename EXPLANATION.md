@@ -79,7 +79,7 @@ A special window pops up with a big score circle, a list of every problem found,
 
 ## Who Made This?
 
-This repo was built by the **Veritas Vaults Network** team. We make tools to keep smart contracts safe so people don't lose their digital money.
+This repo is maintained by the **Soroban Guard** team. We make tools to keep smart contracts safe so people don't lose their digital money.
 
 ---
 
