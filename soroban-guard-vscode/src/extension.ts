@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    statusBar.update('ready');
+    statusBar.update('idle');
     console.log('Soroban Guard activated');
 }
 

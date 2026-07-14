@@ -1,192 +1,216 @@
 import * as vscode from 'vscode';
+import * as cp from 'child_process';
 import * as path from 'path';
-import { execSync } from 'child_process';
-import { getConfig } from './config';
 
-interface SorobanGuardFinding {
-    file: string;
-    line: number;
-    column: number;
+interface GuardFinding {
+    rule_id: string;
     severity: string;
-    rule: string;
     message: string;
+    location: {
+        file: string;
+        line: number;
+        column: number;
+    };
     suggestion: string;
 }
 
-interface SorobanGuardReport {
-    findings: SorobanGuardFinding[];
-    summary: {
-        total: number;
-        critical: number;
-        high: number;
-        medium: number;
-        low: number;
-        info: number;
-    };
+interface GuardReport {
+    contract: string;
+    file: string;
+    score: number;
+    grade: string;
+    findings: GuardFinding[];
+}
+
+interface GuardResults {
+    reports: GuardReport[];
 }
 
 export class SorobanGuardDiagnostics {
     private collection: vscode.DiagnosticCollection;
-    public lastReport: SorobanGuardReport | null = null;
-    private severityLevels: Record<string, vscode.DiagnosticSeverity> = {
-        critical: vscode.DiagnosticSeverity.Error,
-        high: vscode.DiagnosticSeverity.Error,
-        medium: vscode.DiagnosticSeverity.Warning,
-        low: vscode.DiagnosticSeverity.Information,
-        info: vscode.DiagnosticSeverity.Hint,
-    };
-
+    private config: SorobanGuardConfig;
+    public lastReport: GuardResults | null = null;
+    
     constructor(collection: vscode.DiagnosticCollection) {
         this.collection = collection;
+        this.config = this.loadConfig();
     }
-
-    async scanFile(document: vscode.TextDocument): Promise<void> {
-        const config = getConfig();
+    
+    private loadConfig(): SorobanGuardConfig {
+        const config = vscode.workspace.getConfiguration('sorobanGuard');
+        return {
+            cliPath: config.get<string>('path', 'soroban-guard'),
+            minSeverity: config.get<string>('severity', 'low'),
+            exclude: config.get<string>('exclude', ''),
+        };
+    }
+    
+    public updateConfig(): void {
+        this.config = this.loadConfig();
+    }
+    
+    public async scanFile(document: vscode.TextDocument): Promise<void> {
+        if (document.languageId !== 'rust') return;
+        
         const filePath = document.uri.fsPath;
-
-        const excludePatterns = config.exclude.split(',');
-        for (const pattern of excludePatterns) {
-            const globPattern = pattern.trim();
-            if (this.matchesGlob(filePath, globPattern)) {
-                return;
-            }
-        }
-
-        this.collection.set(document.uri, []);
-
+        if (!this.shouldScan(filePath)) return;
+        
+        this.reportStatus('scanning');
+        
         try {
-            const result = this.runSorobanGuard(filePath, config.path);
-            const report: SorobanGuardReport = JSON.parse(result);
-            this.lastReport = report;
-
-            const diagnostics = this.convertFindings(report, config.severity);
-            this.collection.set(document.uri, diagnostics);
-        } catch (err) {
-            const error = err as Error;
-            if (!error.message.includes('not found') && !error.message.includes('ENOENT')) {
-                console.error('Soroban Guard scan error:', error.message);
+            const results = await this.runGuard(filePath);
+            this.lastReport = results;
+            this.updateDiagnostics(document.uri, results);
+            
+            const score = results.reports?.[0]?.score ?? -1;
+            if (score >= 0) {
+                this.reportStatus(`score: ${score}`);
             }
+        } catch (error) {
+            this.reportStatus('error');
+            console.error('Soroban Guard scan failed:', error);
         }
     }
-
-    async scanWorkspace(): Promise<void> {
+    
+    public async scanWorkspace(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) {
-            vscode.window.showErrorMessage('No workspace folder open');
-            return;
-        }
-
-        const config = getConfig();
-        this.collection.clear();
-
+        if (!workspaceFolders) return;
+        
+        this.reportStatus('scanning workspace');
+        
         for (const folder of workspaceFolders) {
-            const uri = vscode.Uri.joinPath(folder.uri, 'src');
-            try {
-                const result = this.runSorobanGuard(uri.fsPath, config.path);
-                const report: SorobanGuardReport = JSON.parse(result);
-                this.lastReport = report;
-
-                const findingsByFile = this.groupFindingsByFile(report, config.severity);
-                for (const [filePath, diagnostics] of findingsByFile) {
-                    const docUri = vscode.Uri.file(filePath);
-                    this.collection.set(docUri, diagnostics);
-                }
-            } catch (err) {
-                const error = err as Error;
-                if (!error.message.includes('not found') && !error.message.includes('ENOENT')) {
-                    console.error('Soroban Guard workspace scan error:', error.message);
-                }
+            const pattern = new vscode.RelativePattern(folder, '**/*.rs');
+            const files = await vscode.workspace.findFiles(pattern);
+            
+            for (const file of files) {
+                const doc = await vscode.workspace.openTextDocument(file);
+                await this.scanFile(doc);
             }
         }
+        
+        this.reportStatus('complete');
     }
-
-    updateConfig(): void {
-        if (this.lastReport) {
-            const config = getConfig();
-            const allDiagnostics = this.convertFindings(this.lastReport, config.severity);
-            if (allDiagnostics.length > 0) {
-                const byFile = this.groupFindingsByFile(this.lastReport, config.severity);
-                this.collection.clear();
-                for (const [filePath, diagnostics] of byFile) {
-                    this.collection.set(vscode.Uri.file(filePath), diagnostics);
-                }
+    
+    private async runGuard(filePath: string): Promise<GuardResults> {
+        return new Promise((resolve, reject) => {
+            const args = [
+                filePath,
+                '--format', 'json',
+                '--min-severity', this.config.minSeverity,
+            ];
+            
+            if (this.config.exclude) {
+                args.push('--exclude', this.config.exclude);
             }
-        }
-    }
-
-    dispose(): void {
-        this.collection.dispose();
-    }
-
-    private runSorobanGuard(target: string, binaryPath: string): string {
-        const config = getConfig();
-        const args = [
-            `--severity`, config.severity,
-            `--format`, `json`,
-            `--output`, `-`,
-        ];
-        return execSync(`"${binaryPath}" scan ${args.join(' ')} "${target}"`, {
-            encoding: 'utf-8',
-            timeout: 30000,
+            
+            const proc = cp.spawn(this.config.cliPath, args, {
+                cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+            });
+            
+            let stdout = '';
+            let stderr = '';
+            
+            proc.stdout.on('data', (data) => { stdout += data; });
+            proc.stderr.on('data', (data) => { stderr += data; });
+            
+            proc.on('close', (code) => {
+                if (code === 0 || code === 1) {
+                    try {
+                        const results = JSON.parse(stdout);
+                        resolve(results);
+                    } catch (e) {
+                        reject(new Error(`Failed to parse output: ${stdout.slice(0, 200)}`));
+                    }
+                } else {
+                    reject(new Error(`Guard CLI failed: ${stderr}`));
+                }
+            });
+            
+            proc.on('error', (err) => {
+                reject(new Error(`Failed to start Guard CLI: ${err.message}`));
+            });
         });
     }
-
-    private convertFindings(report: SorobanGuardReport, minSeverity: string): vscode.Diagnostic[] {
-        return report.findings
-            .filter(f => this.meetsSeverityThreshold(f.severity, minSeverity))
-            .map(f => {
-                const severity = this.severityLevels[f.severity] || vscode.DiagnosticSeverity.Warning;
+    
+    private updateDiagnostics(uri: vscode.Uri, results: GuardResults): void {
+        const diagnostics: vscode.Diagnostic[] = [];
+        
+        for (const report of results.reports || []) {
+            for (const finding of report.findings || []) {
+                const severity = this.severityToVsCode(finding.severity);
+                
+                // Use line from finding or default to first line
+                const line = Math.max(0, (finding.location?.line || 1) - 1);
+                const range = new vscode.Range(line, 0, line, 1000);
+                
                 const diagnostic = new vscode.Diagnostic(
-                    new vscode.Range(
-                        Math.max(0, f.line - 1), Math.max(0, f.column - 1),
-                        Math.max(0, f.line - 1), f.column + 50
-                    ),
-                    `[${f.rule}] ${f.message}`,
+                    range,
+                    `[${finding.rule_id}] ${finding.message}`,
                     severity
                 );
-                diagnostic.code = f.rule;
+                
+                diagnostic.code = finding.rule_id;
                 diagnostic.source = 'soroban-guard';
-                diagnostic.relatedInformation = [
-                    new vscode.DiagnosticRelatedInformation(
-                        new vscode.Location(vscode.Uri.file(f.file), new vscode.Range(0, 0, 0, 0)),
-                        f.suggestion
-                    ),
-                ];
-                return diagnostic;
-            });
-    }
-
-    private groupFindingsByFile(report: SorobanGuardReport, minSeverity: string): Map<string, vscode.Diagnostic[]> {
-        const grouped = new Map<string, vscode.Diagnostic[]>();
-        const diagnostics = this.convertFindings(report, minSeverity);
-        for (const diagnostic of diagnostics) {
-            const filePath = diagnostic.relatedInformation?.[0]?.location?.uri?.fsPath || '';
-            if (!grouped.has(filePath)) {
-                grouped.set(filePath, []);
+                
+                if (finding.suggestion) {
+                    diagnostic.relatedInformation = [
+                        new vscode.DiagnosticRelatedInformation(
+                            new vscode.Location(uri, range),
+                            `Suggestion: ${finding.suggestion}`
+                        )
+                    ];
+                }
+                
+                diagnostics.push(diagnostic);
             }
-            grouped.get(filePath)!.push(diagnostic);
         }
-        return grouped;
+        
+        this.collection.set(uri, diagnostics);
     }
+    
+    private severityToVsCode(severity: string): vscode.DiagnosticSeverity {
+        switch (severity.toLowerCase()) {
+            case 'critical':
+            case 'high':
+                return vscode.DiagnosticSeverity.Error;
+            case 'medium':
+                return vscode.DiagnosticSeverity.Warning;
+            case 'low':
+                return vscode.DiagnosticSeverity.Information;
+            default:
+                return vscode.DiagnosticSeverity.Hint;
+        }
+    }
+    
+    private shouldScan(filePath: string): boolean {
+        if (!this.config.exclude) return true;
+        
+        const patterns = this.config.exclude.split(',');
+        const relativePath = path.relative(
+            vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '',
+            filePath
+        );
+        
+        return !patterns.some(pattern => {
+            const glob = pattern.trim();
+            if (glob.startsWith('**/')) {
+                return relativePath.includes(glob.slice(3));
+            }
+            return false;
+        });
+    }
+    
+    private reportStatus(status: string): void {
+        vscode.commands.executeCommand('setContext', 'sorobanGuard.status', status);
+    }
+    
+    public dispose(): void {
+        this.collection.dispose();
+    }
+}
 
-    private meetsSeverityThreshold(findingSeverity: string, minSeverity: string): boolean {
-        const order = ['info', 'low', 'medium', 'high', 'critical'];
-        return order.indexOf(findingSeverity) >= order.indexOf(minSeverity);
-    }
-
-    private matchesGlob(filePath: string, pattern: string): boolean {
-        if (pattern.startsWith('**/')) {
-            const suffix = pattern.slice(3);
-            return filePath.includes(suffix);
-        }
-        if (pattern.endsWith('/*')) {
-            const prefix = pattern.slice(0, -2);
-            return filePath.startsWith(prefix);
-        }
-        if (pattern.includes('*')) {
-            const parts = pattern.split('*');
-            return parts.every(p => filePath.includes(p));
-        }
-        return filePath.includes(pattern);
-    }
+interface SorobanGuardConfig {
+    cliPath: string;
+    minSeverity: string;
+    exclude: string;
 }

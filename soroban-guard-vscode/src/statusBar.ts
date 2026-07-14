@@ -1,53 +1,53 @@
 import * as vscode from 'vscode';
 
 export class SorobanGuardStatusBar {
-    private statusBarItem: vscode.StatusBarItem;
-
+    private item: vscode.StatusBarItem;
+    
     constructor() {
-        this.statusBarItem = vscode.window.createStatusBarItem(
+        this.item = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
             100
         );
-        this.statusBarItem.command = 'soroban-guard.showReport';
-        this.statusBarItem.tooltip = 'Soroban Guard - Click to show report';
-        this.statusBarItem.show();
+        this.item.command = 'soroban-guard.showReport';
+        this.item.tooltip = 'Click to view full Soroban Guard report';
+        this.item.show();
     }
-
-    update(state: 'idle' | 'ready' | 'scanning' | 'error', findingsCount?: number): void {
-        switch (state) {
+    
+    public update(status: string): void {
+        switch (status) {
             case 'idle':
-                this.statusBarItem.text = '$(shield) Soroban Guard';
-                this.statusBarItem.backgroundColor = undefined;
-                break;
-            case 'ready':
-                this.statusBarItem.text = '$(shield) Soroban Guard';
-                this.statusBarItem.backgroundColor = undefined;
+                this.item.text = '$(shield) Soroban Guard';
+                this.item.backgroundColor = undefined;
                 break;
             case 'scanning':
-                this.statusBarItem.text = '$(sync~spin) Soroban Guard scanning...';
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor(
-                    'statusBarItem.warningBackground'
-                );
+                this.item.text = '$(loading~spin) Soroban Guard...';
+                this.item.backgroundColor = undefined;
+                break;
+            case 'scanning workspace':
+                this.item.text = '$(loading~spin) Soroban Guard: Scanning workspace...';
+                this.item.backgroundColor = undefined;
                 break;
             case 'error':
-                this.statusBarItem.text = '$(shield-x) Soroban Guard error';
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor(
-                    'statusBarItem.errorBackground'
-                );
+                this.item.text = '$(alert) Soroban Guard Error';
+                this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+                break;
+            case 'complete':
+                this.item.text = '$(pass) Soroban Guard Complete';
+                this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+                break;
+            default:
+                if (status.startsWith('score:')) {
+                    const score = status.split(':')[1].trim();
+                    this.item.text = `$(shield) Score: ${score}/100`;
+                    this.item.backgroundColor = parseInt(score) >= 70 
+                        ? new vscode.ThemeColor('statusBarItem.prominentBackground')
+                        : new vscode.ThemeColor('statusBarItem.warningBackground');
+                }
                 break;
         }
-
-        if (findingsCount !== undefined) {
-            this.statusBarItem.text += ` (${findingsCount})`;
-            if (findingsCount > 0) {
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor(
-                    'statusBarItem.errorBackground'
-                );
-            }
-        }
     }
-
-    dispose(): void {
-        this.statusBarItem.dispose();
+    
+    public dispose(): void {
+        this.item.dispose();
     }
 }
