@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "publisher": "your-publisher",
   "license": "MIT",
-  "icon": "images/icon.svg",
+  "icon": "images/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/your-org/soroban-guard-vscode"
@@ -60,7 +60,13 @@
         },
         "sorobanGuard.severity": {
           "type": "string",
-          "enum": ["critical", "high", "medium", "low", "info"],
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
           "default": "low",
           "description": "Minimum severity level to display"
         },
@@ -101,18 +107,19 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
+    "@types/glob": "^8.0.0",
+    "@types/mocha": "^10.0.0",
     "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/test-electron": "^2.0.0",
     "eslint": "^8.0.0",
+    "mocha": "^10.0.0",
+    "sharp": "^0.35.3",
     "ts-loader": "^9.0.0",
     "typescript": "^5.0.0",
     "webpack": "^5.0.0",
-    "webpack-cli": "^5.0.0",
-    "mocha": "^10.0.0",
-    "@types/mocha": "^10.0.0",
-    "@types/glob": "^8.0.0",
-    "@vscode/test-electron": "^2.0.0"
+    "webpack-cli": "^5.0.0"
   }
 }
