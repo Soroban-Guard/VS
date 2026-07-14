@@ -1,4 +1,4 @@
-# Soroban Guard — Explained Like You're 10
+# Soroban Guard — Explained in simplest way possible.
 
 Imagine you have a piggy bank that you made yourself. You love it! But sometimes, without knowing it, you might leave a little crack in the piggy bank. Money could fall out through that crack, and you wouldn't even notice.
 
@@ -17,18 +17,23 @@ This repo is the **VS Code extension** for Soroban Guard. Think of it as a speci
 Here are the main things this robot helper can do:
 
 ### 1. Spots Problems While You Type
+
 When you write code, Soroban Guard underlines unsafe parts with squiggly lines. Red means danger, yellow means be careful, blue means just a heads-up.
 
 ### 2. Fixes Things With One Click
+
 See a red squiggle? Click the lightbulb 💡 and the robot offers to fix it for you. It's like autocomplete, but for security.
 
 ### 3. Gives Your Code a Grade
+
 After checking your code, it gives a score out of 100 and a letter grade (A, B, C, etc.). 90+ is great! Below 50 means there's work to do.
 
 ### 4. Checks All Your Files at Once
+
 Have a whole folder of code? Run "Scan Workspace" and it checks everything everywhere, all at once.
 
 ### 5. Shows a Full Report
+
 A special window pops up with a big score circle, a list of every problem found, and suggestions for how to fix each one.
 
 ---
@@ -67,13 +72,13 @@ A special window pops up with a big score circle, a list of every problem found,
 
 ## What Kind of Cracks Does It Find?
 
-| Problem | What It Means |
-|---------|---------------|
-| **No key check** | You forgot to check "who is knocking" before opening the door |
-| **Math that can break** | You're doing math that could overflow (like a car speedometer going past 999,999 and back to 0) |
-| **Reentrancy risk** | Someone could call your function over and over before it finishes, like a kid asking "can I have a cookie?" 100 times without waiting for the answer |
-| **Missing event log** | Something important happened but nobody wrote it down |
-| **No expiration date** | Data lives forever with no way to clean it up |
+| Problem                 | What It Means                                                                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No key check**        | You forgot to check "who is knocking" before opening the door                                                                                        |
+| **Math that can break** | You're doing math that could overflow (like a car speedometer going past 999,999 and back to 0)                                                      |
+| **Reentrancy risk**     | Someone could call your function over and over before it finishes, like a kid asking "can I have a cookie?" 100 times without waiting for the answer |
+| **Missing event log**   | Something important happened but nobody wrote it down                                                                                                |
+| **No expiration date**  | Data lives forever with no way to clean it up                                                                                                        |
 
 ---
 
@@ -89,4 +94,4 @@ Yes! If you know how to code, you can open this project, fix bugs, or add new fe
 
 ---
 
-*Remember: A secure piggy bank is a happy piggy bank! 🐷🔒*
+_Remember: A secure piggy bank is a happy piggy bank! 🐷🔒_
