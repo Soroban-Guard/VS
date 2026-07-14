@@ -1,0 +1,115 @@
+{
+  "name": "soroban-guard",
+  "displayName": "Soroban Guard",
+  "description": "Real-time security analysis for Soroban smart contracts",
+  "version": "0.1.0",
+  "publisher": "your-publisher",
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/soroban-guard-vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Testing"
+  ],
+  "keywords": [
+    "soroban",
+    "stellar",
+    "smart-contracts",
+    "security",
+    "static-analysis"
+  ],
+  "activationEvents": [
+    "onLanguage:rust",
+    "onCommand:soroban-guard.scanFile",
+    "onCommand:soroban-guard.scanWorkspace"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "soroban-guard.scanFile",
+        "title": "Soroban Guard: Scan Current File"
+      },
+      {
+        "command": "soroban-guard.scanWorkspace",
+        "title": "Soroban Guard: Scan Workspace"
+      },
+      {
+        "command": "soroban-guard.clearResults",
+        "title": "Soroban Guard: Clear Results"
+      },
+      {
+        "command": "soroban-guard.showReport",
+        "title": "Soroban Guard: Show Full Report"
+      }
+    ],
+    "configuration": {
+      "title": "Soroban Guard",
+      "properties": {
+        "sorobanGuard.path": {
+          "type": "string",
+          "default": "soroban-guard",
+          "description": "Path to the soroban-guard CLI binary"
+        },
+        "sorobanGuard.severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "info"],
+          "default": "low",
+          "description": "Minimum severity level to display"
+        },
+        "sorobanGuard.runOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run analysis on file save"
+        },
+        "sorobanGuard.exclude": {
+          "type": "string",
+          "default": "**/test_*,**/fixtures/*",
+          "description": "Glob patterns to exclude"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "soroban-guard.scanFile",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "soroban-guard.scanFile",
+          "when": "editorLangId == rust",
+          "group": "1_modification"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run lint",
+    "compile": "webpack --mode production",
+    "watch": "webpack --mode development --watch",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "ts-loader": "^9.0.0",
+    "typescript": "^5.0.0",
+    "webpack": "^5.0.0",
+    "webpack-cli": "^5.0.0",
+    "@vscode/test-electron": "^2.0.0"
+  }
+}
