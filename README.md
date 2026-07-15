@@ -52,7 +52,7 @@ Real-time security analysis for [Soroban](https://soroban.stellar.org/) smart co
 Before using this extension, ensure you have the following installed:
 
 1. **Soroban Guard CLI** — The analysis engine that powers the extension.
-   - Install from [Soroban-Guard-Core](https://github.com/Veritas-Vaults-Network/Soroban-Guard-Core)
+   - Install from the [Soroban Guard CLI repository](https://github.com/Soroban-Guard/Soroban-Guard-Core)
    - Ensure the binary is available in your `PATH` or configure the path in settings
    - Verify with: `soroban-guard --version`
 
@@ -63,13 +63,6 @@ Before using this extension, ensure you have the following installed:
 ---
 
 ## Installation
-
-### From VS Code Marketplace
-
-1. Open VS Code
-2. Go to the Extensions view (`Ctrl+Shift+X`)
-3. Search for "Soroban Guard"
-4. Click **Install**
 
 ### From VSIX
 
