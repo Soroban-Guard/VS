@@ -47,6 +47,11 @@ export class SorobanGuardStatusBar {
         }
     }
     
+    public updateProgress(current: number, total: number): void {
+        this.item.text = `$(loading~spin) Soroban Guard: Scanning ${current}/${total}`;
+        this.item.backgroundColor = undefined;
+    }
+
     public dispose(): void {
         this.item.dispose();
     }
