@@ -3,12 +3,12 @@
   "displayName": "Soroban Guard",
   "description": "Real-time security analysis for Soroban smart contracts",
   "version": "0.1.0",
-  "publisher": "your-publisher",
+  "publisher": "Soroban-Guard",
   "license": "MIT",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/soroban-guard-vscode"
+    "url": "https://github.com/Soroban-Guard/VS"
   },
   "engines": {
     "vscode": "^1.85.0"
