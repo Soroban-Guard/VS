@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 interface Finding {
     severity: string;
@@ -30,6 +31,34 @@ export function showReportPanel(results: Results | null): void {
     );
     
     panel.webview.html = generateHtml(results);
+
+    panel.webview.onDidReceiveMessage(async (message) => {
+        if (message.command === 'openFile') {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+
+            const filePath = message.file as string;
+            const line = (message.line as number) || 1;
+            const root = workspaceFolders[0].uri.fsPath;
+            const fullPath = path.isAbsolute(filePath) ? filePath : path.join(root, filePath);
+            const fileUri = vscode.Uri.file(fullPath);
+
+            try {
+                const document = await vscode.workspace.openTextDocument(fileUri);
+                const editor = await vscode.window.showTextDocument(document, { preview: false });
+
+                const zeroLine = Math.max(0, line - 1);
+                const range = new vscode.Range(zeroLine, 0, zeroLine, 0);
+                editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+                editor.selection = new vscode.Selection(zeroLine, 0, zeroLine, 0);
+            } catch {
+                vscode.window.showErrorMessage(`Could not open file: ${filePath}`);
+            }
+        }
+    });
 }
 
 function generateHtml(results: Results | null): string {
@@ -57,15 +86,20 @@ function generateHtml(results: Results | null): string {
         info: '#6c757d',
     };
     
-    const findingRows = findings.map((f: Finding) => `
-        <tr>
+    const findingRows = findings.map((f: Finding) => {
+        const hasLocation = f.location?.file && f.location?.line;
+        const clickAttrs = hasLocation
+            ? `data-file="${f.location!.file}" data-line="${f.location!.line}" class="clickable"`
+            : '';
+        return `
+        <tr ${clickAttrs}>
             <td><span class="badge" style="background: ${severityColors[f.severity] || '#6c757d'}">${f.severity}</span></td>
             <td><code>${f.rule_id}</code></td>
             <td>${f.message}</td>
-            <td>${f.location?.file || '-'}:${f.location?.line || '-'}</td>
+            <td>${hasLocation ? `${f.location!.file}:${f.location!.line}` : '-'}</td>
             <td>${f.suggestion || '-'}</td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
     
     return `<!DOCTYPE html>
     <html>
@@ -85,6 +119,9 @@ function generateHtml(results: Results | null): string {
             th { background: #f8f9fa; font-weight: 600; }
             .badge { padding: 2px 8px; border-radius: 12px; color: white; font-size: 11px; font-weight: 600; }
             code { font-family: 'Cascadia Code', monospace; font-size: 12px; }
+            tr.clickable { cursor: pointer; }
+            tr.clickable:hover { background: #e8e8e8; }
+            tr.clickable td:last-child { font-size: 11px; color: #666; }
         </style>
     </head>
     <body>
@@ -100,8 +137,22 @@ function generateHtml(results: Results | null): string {
             </thead>
             <tbody>
                 ${findingRows || '<tr><td colspan="5" style="text-align: center;">No findings</td></tr>'}
-            </tbody>
-        </table>
-    </body>
-    </html>`;
+        </tbody>
+            </table>
+        <script>
+            (function() {
+                const vscode = acquireVsCodeApi();
+                document.querySelectorAll('tr.clickable').forEach(function(row) {
+                    row.addEventListener('click', function() {
+                        const file = row.getAttribute('data-file');
+                        const line = parseInt(row.getAttribute('data-line'), 10);
+                        if (file) {
+                            vscode.postMessage({ command: 'openFile', file: file, line: line });
+                        }
+                    });
+                });
+            })();
+        </script>
+        </body>
+        </html>`;
 }
