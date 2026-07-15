@@ -12,6 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     diagnosticsProvider = new SorobanGuardDiagnostics(diagnosticCollection);
     statusBar = new SorobanGuardStatusBar();
+    diagnosticsProvider.progressCallback = (current, total) => statusBar.updateProgress(current, total);
 
     context.subscriptions.push(
         vscode.commands.registerCommand('soroban-guard.scanFile', () => {

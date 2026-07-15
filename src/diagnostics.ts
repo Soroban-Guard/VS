@@ -38,6 +38,8 @@ export class SorobanGuardDiagnostics {
     private cache: Map<string, CacheEntry> = new Map();
     private outputChannel: vscode.OutputChannel;
     public lastReport: GuardResults | null = null;
+    public progressCallback?: (completed: number, total: number) => void;
+    public workspaceAverageScore: number = 0;
     
     constructor(collection: vscode.DiagnosticCollection) {
         this.collection = collection;
@@ -88,6 +90,7 @@ export class SorobanGuardDiagnostics {
             cliPath: config.get<string>('path', 'soroban-guard'),
             minSeverity: config.get<string>('severity', 'low'),
             exclude: config.get<string>('exclude', ''),
+            maxConcurrency: config.get<number>('maxConcurrency', 4),
         };
     }
     
@@ -96,30 +99,11 @@ export class SorobanGuardDiagnostics {
         this.invalidateCache();
     }
     
-    public async scanFile(document: vscode.TextDocument, force = false): Promise<void> {
-        if (document.languageId !== 'rust') return;
+    public async scanFile(document: vscode.TextDocument): Promise<GuardResults | null> {
+        if (document.languageId !== 'rust') return null;
         
         const filePath = document.uri.fsPath;
-        if (!this.shouldScan(filePath)) return;
-        
-        if (!force) {
-            const cached = this.getCachedResult(filePath, document.getText());
-            if (cached) {
-                this.lastReport = cached;
-                this.updateDiagnostics(document.uri, cached);
-                const score = cached.reports?.[0]?.score ?? -1;
-                if (score >= 0) {
-                    this.reportStatus(`score: ${score}`);
-                } else {
-                    this.reportStatus('complete');
-                }
-                return;
-            }
-        } else {
-            this.outputChannel.appendLine(`[${new Date().toISOString()}] Force scan for ${filePath}`);
-        }
-        
-        this.reportStatus('scanning');
+        if (!this.shouldScan(filePath)) return null;
         
         try {
             const results = await this.runGuard(filePath);
@@ -131,9 +115,11 @@ export class SorobanGuardDiagnostics {
             if (score >= 0) {
                 this.reportStatus(`score: ${score}`);
             }
+            return results;
         } catch (error) {
             this.reportStatus('error');
             console.error('Soroban Guard scan failed:', error);
+            return null;
         }
     }
     
@@ -143,14 +129,65 @@ export class SorobanGuardDiagnostics {
         
         this.reportStatus('scanning workspace');
         
+        const allFiles: vscode.Uri[] = [];
         for (const folder of workspaceFolders) {
             const pattern = new vscode.RelativePattern(folder, '**/*.rs');
             const files = await vscode.workspace.findFiles(pattern);
+            allFiles.push(...files);
+        }
+        
+        if (allFiles.length === 0) {
+            this.reportStatus('complete');
+            return;
+        }
+        
+        const total = allFiles.length;
+        let completed = 0;
+        const scores: number[] = [];
+        const concurrency = this.config.maxConcurrency;
+        const queue = [...allFiles];
+        let index = 0;
+        
+        await new Promise<void>((resolve) => {
+            let active = 0;
             
-            for (const file of files) {
-                const doc = await vscode.workspace.openTextDocument(file);
-                await this.scanFile(doc);
-            }
+            const next = () => {
+                while (active < concurrency && index < queue.length) {
+                    const file = queue[index++];
+                    active++;
+                    
+                    (async () => {
+                        try {
+                            const doc = await vscode.workspace.openTextDocument(file);
+                            const results = await this.scanFile(doc);
+                            if (results?.reports?.[0]?.score != null) {
+                                scores.push(results.reports[0].score);
+                            }
+                        } catch {
+                            // Per-file errors are handled in scanFile and must not abort the scan
+                        } finally {
+                            active--;
+                            completed++;
+                            this.progressCallback?.(completed, total);
+                            this.reportStatus(`scanning ${completed}/${total}`);
+                            
+                            if (completed === total) {
+                                resolve();
+                            } else {
+                                next();
+                            }
+                        }
+                    })();
+                }
+            };
+            
+            next();
+        });
+        
+        if (scores.length > 0) {
+            this.workspaceAverageScore = Math.round(
+                scores.reduce((a, b) => a + b, 0) / scores.length * 100
+            ) / 100;
         }
         
         this.reportStatus('complete');
@@ -280,4 +317,5 @@ interface SorobanGuardConfig {
     cliPath: string;
     minSeverity: string;
     exclude: string;
+    maxConcurrency: number;
 }
