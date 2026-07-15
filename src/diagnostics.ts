@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as crypto from 'crypto';
 import * as path from 'path';
 
 interface GuardFinding {
@@ -26,14 +27,59 @@ interface GuardResults {
     reports: GuardReport[];
 }
 
+interface CacheEntry {
+    hash: string;
+    results: GuardResults;
+}
+
 export class SorobanGuardDiagnostics {
     private collection: vscode.DiagnosticCollection;
     private config: SorobanGuardConfig;
+    private cache: Map<string, CacheEntry> = new Map();
+    private outputChannel: vscode.OutputChannel;
     public lastReport: GuardResults | null = null;
     
     constructor(collection: vscode.DiagnosticCollection) {
         this.collection = collection;
         this.config = this.loadConfig();
+        this.outputChannel = vscode.window.createOutputChannel('Soroban Guard Cache');
+    }
+
+    private computeHash(content: string): string {
+        return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+    }
+
+    private getCachedResult(filePath: string, content: string): GuardResults | null {
+        const entry = this.cache.get(filePath);
+        if (!entry) {
+            this.outputChannel.appendLine(`[${new Date().toISOString()}] Cache MISS for ${filePath} (no entry)`);
+            return null;
+        }
+
+        const currentHash = this.computeHash(content);
+        if (entry.hash === currentHash) {
+            this.outputChannel.appendLine(`[${new Date().toISOString()}] Cache HIT for ${filePath}`);
+            return entry.results;
+        }
+
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Cache MISS for ${filePath} (content changed)`);
+        return null;
+    }
+
+    private setCachedResult(filePath: string, content: string, results: GuardResults): void {
+        const hash = this.computeHash(content);
+        this.cache.set(filePath, { hash, results });
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Cache SET for ${filePath}`);
+    }
+
+    public invalidateCache(): void {
+        this.cache.clear();
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Cache cleared`);
+    }
+
+    public invalidateCacheForFile(filePath: string): void {
+        this.cache.delete(filePath);
+        this.outputChannel.appendLine(`[${new Date().toISOString()}] Cache entry removed for ${filePath}`);
     }
     
     private loadConfig(): SorobanGuardConfig {
@@ -47,19 +93,38 @@ export class SorobanGuardDiagnostics {
     
     public updateConfig(): void {
         this.config = this.loadConfig();
+        this.invalidateCache();
     }
     
-    public async scanFile(document: vscode.TextDocument): Promise<void> {
+    public async scanFile(document: vscode.TextDocument, force = false): Promise<void> {
         if (document.languageId !== 'rust') return;
         
         const filePath = document.uri.fsPath;
         if (!this.shouldScan(filePath)) return;
+        
+        if (!force) {
+            const cached = this.getCachedResult(filePath, document.getText());
+            if (cached) {
+                this.lastReport = cached;
+                this.updateDiagnostics(document.uri, cached);
+                const score = cached.reports?.[0]?.score ?? -1;
+                if (score >= 0) {
+                    this.reportStatus(`score: ${score}`);
+                } else {
+                    this.reportStatus('complete');
+                }
+                return;
+            }
+        } else {
+            this.outputChannel.appendLine(`[${new Date().toISOString()}] Force scan for ${filePath}`);
+        }
         
         this.reportStatus('scanning');
         
         try {
             const results = await this.runGuard(filePath);
             this.lastReport = results;
+            this.setCachedResult(filePath, document.getText(), results);
             this.updateDiagnostics(document.uri, results);
             
             const score = results.reports?.[0]?.score ?? -1;
@@ -206,6 +271,8 @@ export class SorobanGuardDiagnostics {
     
     public dispose(): void {
         this.collection.dispose();
+        this.outputChannel.dispose();
+        this.cache.clear();
     }
 }
 

@@ -38,6 +38,10 @@
         "title": "Soroban Guard: Scan Current File"
       },
       {
+        "command": "soroban-guard.forceScanFile",
+        "title": "Soroban Guard: Force Re-scan Current File"
+      },
+      {
         "command": "soroban-guard.scanWorkspace",
         "title": "Soroban Guard: Scan Workspace"
       },

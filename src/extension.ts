@@ -21,6 +21,14 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
+        vscode.commands.registerCommand('soroban-guard.forceScanFile', () => {
+            const editor = vscode.window.activeTextEditor;
+            if (editor) {
+                diagnosticsProvider.invalidateCacheForFile(editor.document.uri.fsPath);
+                diagnosticsProvider.scanFile(editor.document, true);
+            }
+        }),
+
         vscode.commands.registerCommand('soroban-guard.scanWorkspace', () => {
             diagnosticsProvider.scanWorkspace();
         }),
@@ -48,6 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration('sorobanGuard')) {
                 diagnosticsProvider.updateConfig();
+                diagnosticCollection.clear();
             }
         })
     );
@@ -65,6 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+    diagnosticsProvider?.invalidateCache();
     diagnosticsProvider?.dispose();
     statusBar?.dispose();
 }
